@@ -44,44 +44,68 @@ data <- subset(data, Date >= '2007-02-01' & Date <= '2007-02-02')
 ### Create plots
 
 # Plot 1 - Global Active Power
-png('plot1.png')
-
-hist(data$Global_active_power, 
-     col= 'red', 
-     main = 'Global Active Power', 
-     xlab = 'Global Active Power (kilowatts)')
-
-dev.off()
+plot1 <- function() { 
+  hist(data$Global_active_power, 
+       col= 'red', 
+       main = 'Global Active Power', 
+       xlab = 'Global Active Power (kilowatts)')
+  
+}
 
 # Plot 2 - Global Active Power (kw) against Days
-plot.new()
-png('plot2.png')
-
-plot(x = data$FullDateTime, 
+plot2 <- function() { 
+  plot(x = data$FullDateTime, 
      y = data$Global_active_power, 
      type = 'l',
      xlab = '',
-     ylab = 'Global Active Power (kilowatts')
-
-dev.off()
+     ylab = 'Global Active Power (kilowatts)')
+}
 
 #Plot 3 - Sub_metering plot
 
-plot.new()
-png('plot3.png')
+plot3 <- function() { 
+  plot(x = data$FullDateTime, 
+       y = data$Sub_metering_1, 
+       type = 'n',
+       xlab = '',
+       ylab = 'Energy sub metering')
+  lines(y = data$Sub_metering_1, x = data$FullDateTime, col = 'black')
+  lines(y = data$Sub_metering_2, x = data$FullDateTime, col = 'red')
+  lines(y = data$Sub_metering_3, x = data$FullDateTime, col = 'blue')
+  legend('topright', lty = 1,
+         col = c('black', 'red', 'blue'), 
+         legend = c('Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3'))
+}
 
-plot(x = data$FullDateTime, 
-     y = data$Sub_metering_1, 
-     type = 'n',
-     xlab = '',
-     ylab = 'Energy sub metering')
-lines(y = data$Sub_metering_1, x = data$FullDateTime, col = 'black')
-lines(y = data$Sub_metering_2, x = data$FullDateTime, col = 'red')
-lines(y = data$Sub_metering_3, x = data$FullDateTime, col = 'blue')
-legend('topright', lty = 1,
-       col = c('black', 'red', 'blue'), 
-       legend = c('Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3'))
 
-dev.off()
+#Plot4 - 2x2 image
+plot4 <- function(x) {
+  par(mfcol = c(2,2))
+  plot2()
+  plot3()
+  
+  plot(x = data$FullDateTime, 
+       y = data$Voltage, 
+       type = 'l',
+       xlab = 'datetime',
+       ylab = 'Voltage')
+  
+  plot(x = data$FullDateTime, 
+       y = data$Global_reactive_power, 
+       type = 'l',
+       xlab = 'datetime',
+       ylab = 'Global_reactive_power')
+  
+}
 
-#Plot4 - 
+
+### Create images from plotting functions
+number_of_functions <- 4
+sapply(X = seq(number_of_functions), FUN = function(x) { 
+  function_name <- paste('plot', x, sep = '')
+  f <- match.fun(function_name)
+  plot.new()
+  png(paste(function_name, '.png', sep=''))
+  f()
+  dev.off()
+})
