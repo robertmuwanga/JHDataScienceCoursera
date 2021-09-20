@@ -1,0 +1,82 @@
+---
+title: "An Assessment of the NOAA Storm Database"
+author: "Robert Muwanga"
+date: "9/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+
+pkgs <- c('tidyverse', 'janitor', 'kableExtra', 'skimr', 'here', 'gtsummary')
+install.packages(pkgs[!(pkgs %in% installed.packages())])
+purrr::walk(pkgs, function(pkg) require(pkg, character.only = TRUE))
+```
+
+# Nature events that affect economic and population health
+
+## Synopsis
+
+An analysis of the  U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database was performed to get an understanding of which natural events have a big impact on the health of the United States' population, and the greatest economic consequences across the country. 
+
+From this analysis, it was observed that:
+xxxx
+
+These results were generated from the [U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2). Details on this dataset can be acquired by visiting the [National Weather Service Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and the [National Climatic Data Center Storm Events FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf).
+
+```{r cars}
+summary(cars)
+```
+
+## Data Processing
+
+For the purpose of this exercise, we are looking to answer two key questions:
+
+1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+2. Across the United States, which types of events have the greatest economic consequences?
+
+In this regard, we shall limit our analysis to the following variables:
+
+* STATE: The US state where the event occurred.
+* COUNTY: The US county ID where the event occurred.
+* COUNTYNAME: The US county name where the event occurred.
+* STATE: The US state where the event occurred.
+* EVTYPE: The type of storm event.
+* FATALITIES: Number of fatalities.
+* INJURIES: Number of injuries.
+* PROPDMG: Approximate property damages.
+* PROPDMGEXP: Units for property damage value in USD (K for thousands, M for millions, B for billions).
+* CROPDMG: Approximate crop damages.
+* CROPDMGEXP: Units for crop damage value in USD (K for thousands, M for millions, B for billions).
+
+As part of cleaning up the data, we shall also perform the following transformations:
+
+* Drop the COUNTY variable as this is replicated in the COUNTYNAME.
+* Replace the values of PROPDMG as a product of its original value and that determined by the PROPDMGEXP, e.g., if PROPDMG is 1.0 and PROPDMGEXP is 'K' or 'k', then the new value is 1,000.
+* Replace the values of CROPDMG as a product of its original value and that determined by the CROPDMGEXP, e.g., if CROPDMG is 1.0 and CROPDMGEXP is 'K' or 'k', then the new value is 1,000.
+
+```{r data_processing_part1}
+url <- 'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2'
+filename <- 'StormData.csv.bz2'
+col_selected <- list(STATE='c', COUNTYNAME= 'c', STATE='c', 
+                     EVTYPE='c', FATALITIES='d', INJURIES='d', 
+                     PROPDMG='d', PROPDMGEXP='c', CROPDMG='d', 
+                     CROPDMGEXP = 'c')
+
+data_folder <- here('data')
+if(!dir.exists(data_folder)) 
+  dir.create(data_folder)
+
+if(!file.exists(here(data_folder, filename))) 
+  download.file(url, here(data_folder, filename))
+
+stormdata <- read_csv(here(data_folder, filename), 
+                      col_types = do.call(cols_only, col_selected), 
+                      progress = TRUE)
+
+```
+
+## Results
+
+
