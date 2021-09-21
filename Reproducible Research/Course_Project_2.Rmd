@@ -8,9 +8,11 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
 
-pkgs <- c('tidyverse', 'janitor', 'kableExtra', 'skimr', 'here', 'gtsummary')
+pkgs <- c('tidyverse', 'janitor', 'kableExtra', 'skimr', 'here','scales')
 install.packages(pkgs[!(pkgs %in% installed.packages())])
 purrr::walk(pkgs, function(pkg) require(pkg, character.only = TRUE))
+
+theme_set(theme_bw())
 ```
 
 # Nature events that affect economic and population health
@@ -24,9 +26,6 @@ xxxx
 
 These results were generated from the [U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2). Details on this dataset can be acquired by visiting the [National Weather Service Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and the [National Climatic Data Center Storm Events FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf).
 
-```{r cars}
-summary(cars)
-```
 
 ## Data Processing
 
@@ -40,8 +39,6 @@ In this regard, we shall limit our analysis to the following variables:
 
 * STATE: The US state where the event occurred.
 * COUNTY: The US county ID where the event occurred.
-* COUNTYNAME: The US county name where the event occurred.
-* STATE: The US state where the event occurred.
 * EVTYPE: The type of storm event.
 * FATALITIES: Number of fatalities.
 * INJURIES: Number of injuries.
@@ -53,17 +50,21 @@ In this regard, we shall limit our analysis to the following variables:
 As part of cleaning up the data, we shall also perform the following transformations:
 
 * Drop the COUNTY variable as this is replicated in the COUNTYNAME.
-* Replace the values of PROPDMG as a product of its original value and that determined by the PROPDMGEXP, e.g., if PROPDMG is 1.0 and PROPDMGEXP is 'K' or 'k', then the new value is 1,000.
-* Replace the values of CROPDMG as a product of its original value and that determined by the CROPDMGEXP, e.g., if CROPDMG is 1.0 and CROPDMGEXP is 'K' or 'k', then the new value is 1,000.
+* Calculate the costs of PROPDMG as a product of its original value and that determined by the PROPDMGEXP, e.g., if PROPDMG is 1.0 and PROPDMGEXP is 'K' or 'k', then the new value is 1,000.
+* Calculate the costs of CROPDMG as a product of its original value and that determined by the CROPDMGEXP, e.g., if CROPDMG is 1.0 and CROPDMGEXP is 'K' or 'k', then the new value is 1,000.
 
 ```{r data_processing_part1}
+
+# Define data location and name
 url <- 'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2'
 filename <- 'StormData.csv.bz2'
-col_selected <- list(STATE='c', COUNTYNAME= 'c', STATE='c', 
-                     EVTYPE='c', FATALITIES='d', INJURIES='d', 
-                     PROPDMG='d', PROPDMGEXP='c', CROPDMG='d', 
+
+# Select only the columns of interest.
+col_selected <- list(COUNTY = 'c', STATE='c', EVTYPE='c', FATALITIES='d', 
+                     INJURIES='d', PROPDMG='d', PROPDMGEXP='c', CROPDMG='d', 
                      CROPDMGEXP = 'c')
 
+# Download the source data into the appropriate folder
 data_folder <- here('data')
 if(!dir.exists(data_folder)) 
   dir.create(data_folder)
@@ -71,12 +72,137 @@ if(!dir.exists(data_folder))
 if(!file.exists(here(data_folder, filename))) 
   download.file(url, here(data_folder, filename))
 
+# Read in the data
 stormdata <- read_csv(here(data_folder, filename), 
                       col_types = do.call(cols_only, col_selected), 
-                      progress = TRUE)
+                      progress = TRUE) 
 
 ```
 
+Let's assess our information:
+
+```{r data_processing_2}
+
+skim_without_charts(stormdata)
+
+```
+
+From the output we notice that the **PROPDMGEXP and CROPDMGEXP have 18 and 8 unique values respectively**.
+
+Let's investigate what these values are and map them to the right "power of 10" (exponent) that we can use to calculate and update the property and crop damage costs (PROPDMG and CROPDMG respectively).
+
+```{r exp_values}
+
+exp_values <- c(stormdata$PROPDMGEXP, stormdata$CROPDMGEXP) %>% unique
+print(exp_values)
+
+```
+We have alphanumeric and special characters making up the spectrum of possible values. We shall allocate the new values using the following conditions:
+
+* H, K/k, M/m, B, and H will be given the exponent 2, 3, 6, and 9 respectively.
+* PROPDMGEXP or CROPDMGEXP variables with 'NA' values will award the respective PROPDMG or CROPDMG value as Zero.
+* Observations with special characters will be dropped from the dataset. Without additional information, it will be difficult to quantify these results.
+
+```{r data_processing_3}
+
+## Drop records with invalid CROPDMGEXP and PROPDMGEXP values
+invalid_exp <- c('+', '?', '-')
+
+drop_obs <- c(which(stormdata$PROPDMGEXP %in% invalid_exp), which(stormdata$CROPDMGEXP %in% invalid_exp))
+stormdata <- stormdata[-drop_obs, ]
+
+## Calculate the PROPDMG costs -----------------------------------------------
+
+# Extract the PROPDMG exponent values and assign them the respective integer value
+PROPDMGEXP_values <- stormdata$PROPDMGEXP
+
+PROPDMG_NEW <- case_when(
+  is.na(PROPDMGEXP_values) ~ 0,
+  str_to_upper(PROPDMGEXP_values) == 'K' ~ 3,
+  str_to_upper(PROPDMGEXP_values) == 'M' ~ 6,
+  str_to_upper(PROPDMGEXP_values) == 'H' ~ 2,
+  str_to_upper(PROPDMGEXP_values) == 'B' ~ 9,
+  TRUE ~ 0)
+
+# Assign the PROPDMG costs accordingly.
+stormdata$PROPDMG_COST <- stormdata$PROPDMG * (10**PROPDMG_NEW)
+
+## Calculate the CROPDMG costs -----------------------------------------------
+
+# Extract the CROPDMG exponent values and assign them the respective integer value
+CROPDMGEXP_values <- stormdata$CROPDMGEXP
+
+CROPDMG_NEW <- case_when(
+  is.na(CROPDMGEXP_values) ~ 0,
+  str_to_upper(CROPDMGEXP_values) == 'K' ~ 3,
+  str_to_upper(CROPDMGEXP_values) == 'M' ~ 6,
+  str_to_upper(CROPDMGEXP_values) == 'H' ~ 2,
+  str_to_upper(CROPDMGEXP_values) == 'B' ~ 9,
+  TRUE ~ 0)
+
+# Assign the PROPDMG costs accordingly.
+stormdata$CROPDMG_COST <- stormdata$CROPDMG * (10**CROPDMG_NEW)
+
+```
+
+Before we can answer the questions of interest, we will need to **cross-check the EVTYPEs to ensure that they are standardised**.
+
+```{r evtypes_check}
+stormdata$EVTYPE %>% unique %>% sort
+
+```
+
+We can see that there are a number duplicates and irregularities in the data that need to be standardized in accordance to the Storm Data Documentation. However, given the sheer amount of data and the scale of effort that would be required to clean and standardize these values, we shall instead identify the **top 10** events or events that have results greater than zero based on each question in the results section and clean up the respective EVTYPE before graphing the details. 
+
 ## Results
 
+With the relatively cleaned datasets, let's go about answering our questions:
+
+**1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?**
+
+```{r question_one}
+question_one <-stormdata %>% 
+  group_by(EVTYPE) %>% 
+  summarize(Population_Affected = sum(FATALITIES, INJURIES)) %>%
+  arrange(desc(Population_Affected)) %>%
+  ungroup() %>% 
+  top_n(10)
+
+question_one
+
+```
+Let's clean up the data before we graph it.
+
+```{r clean_question_one}
+
+# Clean data
+question_one$EVTYPE <- case_when(
+  question_one$EVTYPE == 'TSTM WIND' ~ 'THUNDERSTORM WIND',
+  TRUE ~ question_one$EVTYPE
+)
+
+# Sum quantities of observations with the same EVTYPE
+question_one <- question_one %>% 
+  group_by(EVTYPE) %>% 
+  summarize(Population_Affected = sum(Population_Affected)) %>% 
+  ungroup() %>% 
+  arrange(desc(Population_Affected))
+
+
+# Graph results
+question_one %>% 
+  ggplot(aes(x = reorder(EVTYPE, Population_Affected), y = Population_Affected)) + 
+  geom_bar(stat = 'identity') + 
+  scale_y_continuous(labels = scales::comma) + 
+  labs(
+    x = 'Weather Event Type', 
+    y = 'Population size affected', 
+    title = 'Events harmful to the population health across the United States',
+    caption = 'Data from US NOAA, 1966 - 2001'
+  ) +
+  coord_flip() 
+
+```
+
+**2. Across the United States, which types of events have the greatest economic consequences? **
 
